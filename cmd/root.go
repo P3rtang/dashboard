@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gen2brain/beeep"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +39,8 @@ type YahooMetadata struct {
 	InstrumentType InstrumentType
 	RegMarketPrice float64 `json:"regularMarketPrice"`
 	RegMarketTime  int64   `json:"regularMarketTime"`
+	PreviousClose  float64 `json:"previousClose"`
+
 	TradingPeriods [][]TradingPeriod
 }
 
@@ -66,6 +69,7 @@ func RunDaily(_ *cobra.Command, _ []string) {
 			log.Println("Could not read response body")
 			return
 		}
+
 		var stockData YahooJSON
 		err = json.Unmarshal(body, &stockData)
 
@@ -74,14 +78,33 @@ func RunDaily(_ *cobra.Command, _ []string) {
 			return
 		}
 
-		dayEnd := stockData.Chart.Result[0].Metadata.TradingPeriods[0][0].End
-		marketTime := stockData.Chart.Result[0].Metadata.RegMarketTime
-		if marketTime >= dayEnd && dayEnd != lastCheck {
+		stockInfo := stockData.Chart.Result[0].Metadata
+		dayEnd := stockInfo.TradingPeriods[0][0].End
+		marketTime := stockInfo.RegMarketTime
+
+		if marketTime >= dayEnd-100 && dayEnd != lastCheck {
 			lastCheck = dayEnd
-			fmt.Println(stockData.Chart.Result[0].Metadata.RegMarketPrice)
+			dayResult := stockInfo.RegMarketPrice - stockInfo.PreviousClose
+
+			var dayResultString string
+			if dayResult < 0 {
+				dayResultString = fmt.Sprintf("<b>%f</b>", dayResult)
+			} else {
+				dayResultString = fmt.Sprintf("%f", dayResult)
+			}
+
+			beeep.Notify(
+				"Stock Day End",
+				fmt.Sprintf("\n%s\t\t%f\t%s",
+					stockData.Chart.Result[0].Metadata.Symbol,
+					stockInfo.RegMarketPrice,
+					dayResultString,
+				),
+				"",
+			)
 		}
 
-		time.Sleep(time.Hour)
+		time.Sleep(time.Minute * 10)
 	}
 }
 
