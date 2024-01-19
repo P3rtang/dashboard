@@ -1,7 +1,7 @@
 package main
 
 import (
-	"dashboard/cmd"
+	root "dashboard/cmd"
 )
 
 func main() {

@@ -1,117 +1,63 @@
-package root
+package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
-	"time"
 
-	"github.com/gen2brain/beeep"
 	"github.com/spf13/cobra"
 )
 
-type InstrumentType string
-
-const (
-	EQUITY InstrumentType = "EQUITY"
-)
-
-type YahooJSON struct {
-	Chart YahooChart `json:"chart"`
-}
-
-type YahooChart struct {
-	Result []YahooResult `json:"result"`
-	Error  string        `json:"error"`
-}
-
-type YahooResult struct {
-	Metadata YahooMetadata `json:"meta"`
-}
-
-type YahooMetadata struct {
-	Currency       string `json:"currency"`
-	Symbol         string `json:"symbol"`
-	Exchange       string `json:"exchangeName"`
-	InstrumentType InstrumentType
-	RegMarketPrice float64 `json:"regularMarketPrice"`
-	RegMarketTime  int64   `json:"regularMarketTime"`
-	PreviousClose  float64 `json:"previousClose"`
-
-	TradingPeriods [][]TradingPeriod
-}
-
-type TradingPeriod struct {
-	Timezone  string `json:"timezone"`
-	Start     int64  `json:"start"`
-	End       int64  `json:"end"`
-	GmtOffset int64  `json:"gmtoffset"`
-}
-
-func RunDaily(_ *cobra.Command, _ []string) {
-	lastCheck := time.Now().Unix()
-	for true {
-		resp, err := http.Get("https://query1.finance.yahoo.com/v8/finance/chart/AIR.PA?region=US&lang=en-US&includePrePost=false&interval=2m&useYfid=true&range=1d&corsDomain=finance.yahoo.com&.tsrc=finance")
-
-		if err != nil {
-			log.Println("Could not fetch Stock data")
-			return
-		}
-
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-
-		if err != nil {
-			log.Println("Could not read response body")
-			return
-		}
-
-		var stockData YahooJSON
-		err = json.Unmarshal(body, &stockData)
-
-		if err != nil {
-			log.Println("Could not parse JSON")
-			return
-		}
-
-		stockInfo := stockData.Chart.Result[0].Metadata
-		dayEnd := stockInfo.TradingPeriods[0][0].End
-		marketTime := stockInfo.RegMarketTime
-
-		if marketTime >= dayEnd-100 && dayEnd != lastCheck {
-			lastCheck = dayEnd
-			dayResult := stockInfo.RegMarketPrice - stockInfo.PreviousClose
-
-			var dayResultString string
-			if dayResult < 0 {
-				dayResultString = fmt.Sprintf("<b>%f</b>", dayResult)
-			} else {
-				dayResultString = fmt.Sprintf("%f", dayResult)
-			}
-
-			beeep.Notify(
-				"Stock Day End",
-				fmt.Sprintf("\n%s\t\t%f\t%s",
-					stockData.Chart.Result[0].Metadata.Symbol,
-					stockInfo.RegMarketPrice,
-					dayResultString,
-				),
-				"",
-			)
-		}
-
-		time.Sleep(time.Minute * 10)
-	}
-}
-
 var rootCmd = &cobra.Command{
-	Use:   "Start the dashboard server",
-	Run:   RunDaily,
+	Use:   "dashboard",
 	Short: "Personal stock dashboard",
+}
+
+func init() {
+	var searchCmd = &cobra.Command{
+		Use:   "search <name>",
+		Run:   SearchStock,
+		Short: "Seach for a stock by name",
+		Args:  cobra.MatchAll(cobra.ExactArgs(1)),
+	}
+
+	searchCmd.Flags().IntP("number", "n", 5, "Number of results returned (max 5)")
+	rootCmd.AddCommand(searchCmd)
+
+	var serveCmd = &cobra.Command{
+		Use:   "serve",
+		Run:   Serve,
+		Short: "Start the notification server",
+	}
+
+	rootCmd.AddCommand(serveCmd)
+
+	var trackCmd = &cobra.Command{
+		Use:   "track",
+		Run:   TrackStock,
+		Short: "Keep track of a stock",
+		Args:  cobra.MatchAll(cobra.ExactArgs(1)),
+	}
+
+	rootCmd.AddCommand(trackCmd)
+
+	var listTrackedCmd = &cobra.Command{
+		Use:   "ls",
+		Run:   ListTracked,
+		Short: "Show your tracked stocks",
+		Args:  cobra.NoArgs,
+	}
+
+	rootCmd.AddCommand(listTrackedCmd)
+
+	var notifyCmd = &cobra.Command{
+		Use:   "notify <symbol>",
+		Run:   ToggleNotify,
+		Short: "Notify of price changes",
+		Args:  cobra.MatchAll(cobra.ExactArgs(1)),
+	}
+	notifyCmd.Flags().BoolP("remove", "r", false, "Remove notification")
+
+	rootCmd.AddCommand(notifyCmd)
 }
 
 func Execute() {
