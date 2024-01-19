@@ -2,6 +2,7 @@ package notify
 
 import (
 	yahooapi "dashboard/yahooApi"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -14,7 +15,7 @@ type GetSymbolList interface {
 	NotificationSymbols() ([]yahooapi.Symbol, error)
 }
 
-func StockNotification(chart yahooapi.YahooChart) (err error) {
+func StockNotification(chart *yahooapi.YahooChart) (err error) {
 	stockInfo := chart.Result[0].Metadata
 	dayResult := stockInfo.RegMarketPrice - stockInfo.PreviousClose
 	dayPercentage := dayResult / stockInfo.PreviousClose
@@ -32,7 +33,7 @@ func StockNotification(chart yahooapi.YahooChart) (err error) {
 	beeep.Notify(
 		"Stock Day End",
 		fmt.Sprintf(
-			"\n%s\t\t%.2f\t\t%s\t\t%s",
+			"\n%s        %.2f      %s  (%s)",
 			chart.Result[0].Metadata.Symbol,
 			stockInfo.RegMarketPrice,
 			dayResultString,
@@ -45,7 +46,7 @@ func StockNotification(chart yahooapi.YahooChart) (err error) {
 }
 
 func RunDaily(list GetSymbolList) (err error) {
-	lastCheck := time.Now().Unix()
+	var lastCheck int64 = 0
 	for true {
 		notiSymbols, err := list.NotificationSymbols()
 		if err != nil {
@@ -57,12 +58,15 @@ func RunDaily(list GetSymbolList) (err error) {
 			if err != nil {
 				return err
 			}
+			if chart == nil || len(chart.Result) == 0 {
+				return errors.New("Unable to fetch chart data")
+			}
 
 			stockInfo := chart.Result[0].Metadata
 			dayEnd := stockInfo.TradingPeriods[0][0].End
 			marketTime := stockInfo.RegMarketTime
-			if marketTime >= dayEnd-100 && dayEnd != lastCheck {
-				lastCheck = dayEnd
+			if marketTime >= dayEnd-100 && dayEnd >= lastCheck {
+				StockNotification(chart)
 			}
 
 			if err != nil {
@@ -71,6 +75,7 @@ func RunDaily(list GetSymbolList) (err error) {
 			}
 		}
 
+		lastCheck = time.Now().Unix()
 		time.Sleep(time.Minute * 10)
 	}
 

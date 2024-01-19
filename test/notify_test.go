@@ -55,7 +55,7 @@ func TestStockNotification(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = notify.StockNotification(chart)
+	err = notify.StockNotification(&chart)
 	if err != nil {
 		t.Error(err)
 	}

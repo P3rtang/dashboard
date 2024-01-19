@@ -66,5 +66,5 @@ func GetStockData(symbol Symbol) (result *YahooChart, err error) {
 		return
 	}
 
-	return
+	return &stockData.Chart, nil
 }

@@ -16,5 +16,9 @@ func Serve(cmd *cobra.Command, _ []string) {
 	}
 
 	go server.Serve()
-	notify.RunDaily(server.Database)
+	err = notify.RunDaily(server.Database)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 }
